@@ -1,0 +1,771 @@
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>电力数据管理系统</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script src="https://cdn.jsdelivr.net/npm/react@18.0.0/umd/react.development.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/react-dom@18.0.0/umd/react-dom.development.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.js"></script>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+	<style>
+		.modal-overlay {
+			position: fixed;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: rgba(0, 0, 0, 0.5);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			z-index: 1000;
+		}
+
+		.modal-content {
+			background: white;
+			border-radius: 8px;
+			width: 600px;
+			max-width: 90%;
+			box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+		}
+
+		.modal-header {
+			padding: 16px 24px;
+			border-bottom: 1px solid #e5e7eb;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		.modal-body {
+			padding: 24px;
+			max-height: 400px;
+			overflow-y: auto;
+		}
+
+		.modal-footer {
+			padding: 16px 24px;
+			border-top: 1px solid #e5e7eb;
+			display: flex;
+			justify-content: flex-end;
+			gap: 10px;
+		}
+
+		.log-entry {
+			padding: 8px 0;
+			border-bottom: 1px solid #f3f4f6;
+			font-family: monospace;
+			font-size: 13px;
+		}
+
+		.log-entry:last-child {
+			border-bottom: none;
+		}
+
+		.log-time {
+			color: #6b7280;
+		}
+
+		.log-success {
+			color: #059669;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="root"></div>
+	<script type="text/babel">
+		const { useState } = React;
+		function App() {
+			const [activeTab, setActiveTab] = useState('分时(售电公司)');
+			const [showImportLogModal, setShowImportLogModal] = useState(false);
+			const [showRpaModal, setShowRpaModal] = useState(false);
+			const [showRecalculateModal, setShowRecalculateModal] = useState(false);
+			const [showDataLogModal, setShowDataLogModal] = useState(false);
+			const [selectedDates, setSelectedDates] = useState([]);
+			const [rpaEnabled, setRpaEnabled] = useState(false);
+			const [rpaDays, setRpaDays] = useState(1);
+			const [rpaTime, setRpaTime] = useState('08:00');
+			const [rpaStartDate, setRpaStartDate] = useState('');
+			const [rpaEndDate, setRpaEndDate] = useState('');
+			const [floatMsg, setFloatMsg] = useState('');
+			const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+			const availableDates = [
+				{ date: '2026-04-01', hasData: true },
+				{ date: '2026-04-02', hasData: true },
+				{ date: '2026-04-03', hasData: true },
+				{ date: '2026-04-04', hasData: true },
+				{ date: '2026-04-05', hasData: true },
+				{ date: '2026-04-06', hasData: false },
+				{ date: '2026-04-07', hasData: false },
+			];
+
+			const tabs = [
+				'分时(售电公司)',
+				'分月(售电公司)',
+				'分时(户号)',
+				'分月(户号)'
+			];
+			// 分时(售电公司) 数据
+			const hourlyCompanyData = [
+				{ province: '湖北省', date: '2026-04-05', time1: '6.486', time2: '6.746', time3: '5.819', time4: '6.429', time5: '5.721', time6: '5.899', time7: '5.847' },
+				{ province: '湖北省', date: '2026-04-04', time1: '10.916', time2: '10.054', time3: '10.417', time4: '9.796', time5: '10.384', time6: '9.425', time7: '9.928' },
+				{ province: '湖北省', date: '2026-04-03', time1: '10.974', time2: '10.687', time3: '10.231', time4: '10.288', time5: '10.236', time6: '10.316', time7: '10.060' },
+				{ province: '湖北省', date: '2026-04-02', time1: '10.921', time2: '10.259', time3: '10.240', time4: '10.046', time5: '10.247', time6: '10.052', time7: '9.615' },
+				{ province: '湖北省', date: '2026-04-01', time1: '7.212', time2: '6.943', time3: '6.301', time4: '6.793', time5: '6.504', time6: '6.248', time7: '6.457' }
+			];
+			// 分月(售电公司) 数据
+			const monthlyCompanyData = [
+				{ province: '湖北省', month: '2026-04', totalUsage: '2302.856' },
+				{ province: '湖北省', month: '2026-03', totalUsage: '16707.222' },
+				{ province: '湖北省', month: '2026-02', totalUsage: '7161.451' },
+				{ province: '湖北省', month: '2026-01', totalUsage: '18890.183' }
+			];
+			// 分时(用户) 数据
+			const hourlyUserData = [
+				{ province: '湖北省', accountNo: '100001', user: '温州塑欣电器科技有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100002', user: '温州阿外楼度假酒店有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100003', user: '乐清市日业电气有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100004', user: '乐清市东凤弹簧制造有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100005', user: '乐清市通海机械设备厂', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100006', user: '浙江中大电缆制造有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100007', user: '杭州崇博工贸有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100008', user: '瑞鑫集团有限公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100009', user: '乐清市南泰电器有限公司柳市分公司', date: '2026-04-05', time1: '0.000', time2: '0.000', time3: '0.000', time4: '0.000', time5: '0.000', time6: '0.000', time7: '0.000' },
+				{ province: '湖北省', accountNo: '100010', user: '浙江正泰仪器仪表有限责任公司', date: '2026-04-05', time1: '0.001', time2: '0.001', time3: '0.001', time4: '0.001', time5: '0.001', time6: '0.001', time7: '0.001' }
+			];
+			// 分月(用户) 数据
+			const monthlyUserData = [
+				{ province: '湖北省', accountNo: '100011', user: '嘉兴华坤机电设备有限公司', month: '2026-04', totalUsage: '0.014' },
+				{ province: '湖北省', accountNo: '100012', user: '乐清市乐际酒店管理有限公司', month: '2026-04', totalUsage: '0.022' },
+				{ province: '湖北省', accountNo: '100013', user: '浦江县春辉新能源科技有限公司', month: '2026-04', totalUsage: '0.026' },
+				{ province: '湖北省', accountNo: '100014', user: '武义县飞乐印业有限公司', month: '2026-04', totalUsage: '0.001' },
+				{ province: '湖北省', accountNo: '100015', user: '绍兴市林森五金化工有限公司', month: '2026-04', totalUsage: '0.010' },
+				{ province: '湖北省', accountNo: '100016', user: '温州宏业精机有限公司', month: '2026-04', totalUsage: '0.004' },
+				{ province: '湖北省', accountNo: '100017', user: '温州市吉姆特鞋业有限公司', month: '2026-04', totalUsage: '0.002' },
+				{ province: '湖北省', accountNo: '100018', user: '浙江正泰仪器仪表有限责任公司', month: '2026-04', totalUsage: '0.113' },
+				{ province: '湖北省', accountNo: '100019', user: '乐清市东凤弹簧制造有限公司', month: '2026-04', totalUsage: '0.009' },
+				{ province: '湖北省', accountNo: '100020', user: '浙江鑫祥新能源科技股份有限公司', month: '2026-04', totalUsage: '0.003' }
+			];
+			const renderContent = () => {
+				switch (activeTab) {
+					case '分时(售电公司)':
+						return (
+							<div className="p-6 bg-white">
+								{/* 日期选择器 */}
+								<div className="mb-4">
+									<label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+									<div className="flex items-center space-x-4">
+										<input type="date" value="2026-04-01" className="border border-gray-300 rounded px-3 py-2" />
+										<span>→</span>
+										<input type="date" value="2026-04-30" className="border border-gray-300 rounded px-3 py-2" />
+										<i className="fas fa-calendar-alt text-gray-400 ml-2"></i>
+									</div>
+								</div>
+								{/* 按钮 */}
+								<div className="flex space-x-2 mb-4">
+									<button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">查询</button>
+									<button className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">重置</button>
+								</div>
+								{/* 工具栏 */}
+								<div className="flex justify-between items-center mb-4">
+									<span className="text-sm text-gray-600">共 5 项</span>
+									<div className="flex items-center space-x-2">
+										<select className="border border-gray-300 rounded px-3 py-1 text-sm">
+											<option>MWh</option>
+										</select>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded">导出</button>
+										<i className="fas fa-sort text-gray-400"></i>
+										<i className="fas fa-times text-gray-400"></i>
+										<i className="fas fa-th-large text-gray-400"></i>
+									</div>
+								</div>
+								{/* 表格 */}
+								<div className="overflow-x-auto">
+									<table className="w-full border-collapse border border-gray-300">
+										<thead className="bg-gray-50">
+											<tr>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">调控省区</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">日期</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">00:00-00:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">00:30-01:00</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">01:00-01:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">01:30-02:00</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">02:00-02:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">02:30-03:00</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">03:00-03:30</th>
+											</tr>
+										</thead>
+										<tbody>
+											{hourlyCompanyData.map((row, index) => (
+												<tr key={index} className="hover:bg-gray-50">
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.province}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.date}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time1}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time2}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time3}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time4}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time5}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time6}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time7}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						);
+					case '分月(售电公司)':
+						return (
+							<div className="p-6 bg-white">
+								{/* 月份选择器 */}
+								<div className="mb-4">
+									<label className="block text-sm font-medium text-gray-700 mb-2">年月</label>
+									<div className="flex items-center space-x-4">
+										<input type="month" value="2026-01" className="border border-gray-300 rounded px-3 py-2" />
+										<span>→</span>
+										<input type="month" value="2026-12" className="border border-gray-300 rounded px-3 py-2" />
+										<i className="fas fa-calendar-alt text-gray-400 ml-2"></i>
+									</div>
+								</div>
+								{/* 按钮 */}
+								<div className="flex space-x-2 mb-4">
+									<button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">查询</button>
+									<button className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">重置</button>
+								</div>
+								{/* 工具栏 */}
+								<div className="flex justify-between items-center mb-4">
+									<span className="text-sm text-gray-600">共 4 项</span>
+									<div className="flex items-center space-x-2">
+										<select className="border border-gray-300 rounded px-3 py-1 text-sm">
+											<option>MWh</option>
+										</select>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded">导出</button>
+										<i className="fas fa-sort text-gray-400"></i>
+										<i className="fas fa-times text-gray-400"></i>
+										<i className="fas fa-th-large text-gray-400"></i>
+									</div>
+								</div>
+								{/* 表格 */}
+								<div className="overflow-x-auto">
+									<table className="w-full border-collapse border border-gray-300">
+										<thead className="bg-gray-50">
+											<tr>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">调控省区</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">年月</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">总用电量</th>
+											</tr>
+										</thead>
+										<tbody>
+											{monthlyCompanyData.map((row, index) => (
+												<tr key={index} className="hover:bg-gray-50">
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.province}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.month}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.totalUsage}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						);
+					case '分时(户号)':
+						return (
+							<div className="p-6 bg-white">
+								{/* 日期选择器和用户输入 */}
+								<div className="grid grid-cols-2 gap-4 mb-4">
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-2">日期</label>
+										<div className="flex items-center space-x-4">
+											<input type="date" value="2026-04-01" className="border border-gray-300 rounded px-3 py-2 flex-1" />
+											<span>→</span>
+											<input type="date" value="2026-04-30" className="border border-gray-300 rounded px-3 py-2 flex-1" />
+											<i className="fas fa-calendar-alt text-gray-400 ml-2"></i>
+										</div>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-2">电力用户</label>
+										<input type="text" placeholder="请输入" className="border border-gray-300 rounded px-3 py-2 w-full" />
+									</div>
+								</div>
+								{/* 按钮 */}
+								<div className="flex space-x-2 mb-4">
+									<button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">查询</button>
+									<button className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">重置</button>
+								</div>
+								{/* 工具栏 */}
+								<div className="flex justify-between items-center mb-4">
+									<span className="text-sm text-gray-600">共 385 项</span>
+									<div className="flex items-center space-x-2">
+										<select className="border border-gray-300 rounded px-3 py-1 text-sm">
+											<option>MWh</option>
+										</select>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded" onClick={() => setShowImportLogModal(true)}>查看日志</button>
+										<button className="text-sm text-blue-600 border border-blue-300 px-3 py-1 rounded hover:bg-blue-50" onClick={() => setShowRpaModal(true)}>RPA任务配置</button>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded">导入</button>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded">导出</button>
+										<i className="fas fa-sort text-gray-400"></i>
+										<i className="fas fa-times text-gray-400"></i>
+										<i className="fas fa-th-large text-gray-400"></i>
+									</div>
+								</div>
+								{/* 表格 */}
+								<div className="overflow-x-auto">
+									<table className="w-full border-collapse border border-gray-300">
+										<thead className="bg-gray-50">
+											<tr>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">调控省区</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">户号</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">电力用户</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">日期</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">00:00-00:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">00:30-01:00</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">01:00-01:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">01:30-02:00</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">02:00-02:30</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">02:30-03:00</th>
+											</tr>
+										</thead>
+										<tbody>
+											{hourlyUserData.map((row, index) => (
+												<tr key={index} className="hover:bg-gray-50">
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.province}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.accountNo}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.user}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.date}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time1}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time2}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time3}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time4}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time5}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.time6}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+								{/* 分页 */}
+								<div className="flex justify-between items-center mt-4">
+									<div></div>
+									<div className="flex items-center space-x-2">
+										<button className="px-2 py-1 text-gray-500">&lt;</button>
+										<button className="px-3 py-1 bg-blue-500 text-white rounded">1</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">2</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">3</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">4</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">5</button>
+										<span className="px-2">...</span>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">39</button>
+										<button className="px-2 py-1 text-gray-700">&gt;</button>
+										<select className="border border-gray-300 rounded px-2 py-1 text-sm">
+											<option>10 条/页</option>
+										</select>
+										<span className="text-sm text-gray-600">跳至</span>
+										<input type="number" className="border border-gray-300 rounded px-2 py-1 w-16 text-sm" />
+										<span className="text-sm text-gray-600">页</span>
+									</div>
+								</div>
+							</div>
+						);
+					case '分月(户号)':
+						return (
+							<div className="p-6 bg-white">
+								{/* 月份选择器和用户输入 */}
+								<div className="grid grid-cols-2 gap-4 mb-4">
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-2">年月</label>
+										<div className="flex items-center space-x-4">
+											<input type="month" value="2026-01" className="border border-gray-300 rounded px-3 py-2 flex-1" />
+											<span>→</span>
+											<input type="month" value="2026-12" className="border border-gray-300 rounded px-3 py-2 flex-1" />
+											<i className="fas fa-calendar-alt text-gray-400 ml-2"></i>
+										</div>
+									</div>
+									<div>
+										<label className="block text-sm font-medium text-gray-700 mb-2">电力用户</label>
+										<input type="text" placeholder="请输入" className="border border-gray-300 rounded px-3 py-2 w-full" />
+									</div>
+								</div>
+								{/* 按钮 */}
+								<div className="flex space-x-2 mb-4">
+									<button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">查询</button>
+									<button className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300">重置</button>
+								</div>
+								{/* 工具栏 */}
+								<div className="flex justify-between items-center mb-4">
+									<span className="text-sm text-gray-600">共 308 项</span>
+									<div className="flex items-center space-x-2">
+										<select className="border border-gray-300 rounded px-3 py-1 text-sm">
+											<option>MWh</option>
+										</select>
+										<button className="text-sm text-gray-600 border border-gray-300 px-3 py-1 rounded">导出</button>
+
+										<i className="fas fa-sort text-gray-400"></i>
+										<i className="fas fa-times text-gray-400"></i>
+										<i className="fas fa-th-large text-gray-400"></i>
+									</div>
+								</div>
+								{/* 表格 */}
+								<div className="overflow-x-auto">
+									<table className="w-full border-collapse border border-gray-300">
+										<thead className="bg-gray-50">
+											<tr>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">调控省区</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">户号</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">电力用户</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">年月</th>
+												<th className="border border-gray-300 px-4 py-2 text-left text-sm font-medium text-gray-700">总用电量</th>
+											</tr>
+										</thead>
+										<tbody>
+											{monthlyUserData.map((row, index) => (
+												<tr key={index} className="hover:bg-gray-50">
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.province}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.accountNo}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.user}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.month}</td>
+													<td className="border border-gray-300 px-4 py-2 text-sm">{row.totalUsage}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+								</div>
+								{/* 分页 */}
+								<div className="flex justify-between items-center mt-4">
+									<div></div>
+									<div className="flex items-center space-x-2">
+										<button className="px-2 py-1 text-gray-500">&lt;</button>
+										<button className="px-3 py-1 bg-blue-500 text-white rounded">1</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">2</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">3</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">4</button>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">5</button>
+										<span className="px-2">...</span>
+										<button className="px-3 py-1 text-gray-700 hover:bg-gray-100 rounded">31</button>
+										<button className="px-2 py-1 text-gray-700">&gt;</button>
+										<select className="border border-gray-300 rounded px-2 py-1 text-sm">
+											<option>10 条/页</option>
+										</select>
+										<span className="text-sm text-gray-600">跳至</span>
+										<input type="number" className="border border-gray-300 rounded px-2 py-1 w-16 text-sm" />
+										<span className="text-sm text-gray-600">页</span>
+									</div>
+								</div>
+							</div>
+						);
+					default:
+						return (
+							<div className="p-6 bg-white">
+								<p className="text-gray-500">此功能正在开发中...</p>
+							</div>
+						);
+				}
+			};
+			return (
+				<div className="min-h-screen bg-gray-100">
+					<div className="bg-white shadow-sm">
+						{/* 标签页导航 */}
+						<div className="border-b border-gray-200">
+							<nav className="flex space-x-8 px-6">
+								{tabs.map((tab) => (
+									<button
+										key={tab}
+										onClick={() => setActiveTab(tab)}
+										className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab
+											? 'border-blue-500 text-blue-600'
+											: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+											}`}
+									>
+										{tab}
+									</button>
+								))}
+							</nav>
+						</div>
+						{/* 内容区域 */}
+						{renderContent()}
+
+						{/* RPA任务配置弹出窗口 */}
+						{showRpaModal && (
+							<div className="modal-overlay">
+								<div className="modal-content" style={{width: '600px'}}>
+									<div className="modal-header">
+										<h3 className="text-lg font-medium text-gray-900">RPA任务配置</h3>
+										<button onClick={() => setShowRpaModal(false)} className="text-gray-400 hover:text-gray-500">
+											<i className="fas fa-times"></i>
+										</button>
+									</div>
+									<div className="modal-body">
+										{/* 1. 定时爬取配置 */}
+										<div className="mb-6 border-b pb-6">
+											<h4 className="font-medium mb-4 text-gray-800">定时爬取配置</h4>
+											<div className="flex items-center mb-4">
+												<input type="checkbox" id="rpaEnabled" checked={rpaEnabled} onChange={(e) => setRpaEnabled(e.target.checked)} className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300" />
+												<label htmlFor="rpaEnabled" className="text-sm text-gray-700 font-medium cursor-pointer">开启定时爬取</label>
+											</div>
+											<div className="grid grid-cols-2 gap-4">
+												<div>
+													<label className="block text-sm text-gray-600 mb-1">爬取日期配置</label>
+													<div className="flex items-center">
+														<input type="number" value={rpaDays} onChange={(e) => setRpaDays(e.target.value)} disabled={!rpaEnabled} min="0" className="border border-gray-300 rounded px-3 py-1 w-20 text-sm disabled:bg-gray-100 disabled:text-gray-400" />
+														<span className="ml-2 text-sm text-gray-600">日前数据 (D日)</span>
+													</div>
+												</div>
+												<div>
+													<label className="block text-sm text-gray-600 mb-1">定时时间</label>
+													<input type="time" value={rpaTime} onChange={(e) => setRpaTime(e.target.value)} disabled={!rpaEnabled} className="border border-gray-300 rounded px-3 py-1 text-sm w-32 disabled:bg-gray-100 disabled:text-gray-400" />
+												</div>
+											</div>
+											<div className="mt-4 flex justify-end">
+												<button onClick={() => { 
+													setFloatMsg('已保存定时爬取配置'); 
+													setTimeout(() => setFloatMsg(''), 3000); 
+												}} className="bg-blue-500 text-white px-5 py-1.5 rounded text-sm hover:bg-blue-600 transition-colors">保存生效</button>
+											</div>
+										</div>
+										{/* 2. 主动开启RPA任务 */}
+										<div>
+											<h4 className="font-medium mb-4 text-gray-800">主动开启任务</h4>
+											<label className="block text-sm text-gray-600 mb-1">选择日期区间 (结束时间须在今日前)</label>
+											<div className="flex items-center space-x-2 mb-4">
+												<input type="date" value={rpaStartDate} onChange={(e) => setRpaStartDate(e.target.value)} max={yesterday} className="border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-700" />
+												<span className="text-gray-400">→</span>
+												<input type="date" value={rpaEndDate} onChange={(e) => setRpaEndDate(e.target.value)} max={yesterday} className="border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-700" />
+											</div>
+											<div className="flex justify-end">
+												<button onClick={() => { 
+													if(!rpaStartDate || !rpaEndDate) {
+														alert('请选择完整的日期区间！');
+														return;
+													}
+													if(rpaStartDate > rpaEndDate) {
+														alert('开始日期不能晚于结束日期！');
+														return;
+													}
+													setShowRpaModal(false);
+													setFloatMsg('已开启爬虫任务，请打开日志查看任务运行情况'); 
+													setTimeout(() => setFloatMsg(''), 3000); 
+												}} className="bg-green-500 text-white px-5 py-1.5 rounded text-sm hover:bg-green-600 transition-colors">开启任务</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* 一键重算弹出窗口 */}
+						{showRecalculateModal && (
+							<div className="modal-overlay">
+								<div className="modal-content" style={{width: '400px'}}>
+									<div className="modal-header">
+										<h3 className="text-lg font-medium text-gray-900">一键重算</h3>
+										<button onClick={() => setShowRecalculateModal(false)} className="text-gray-400 hover:text-gray-500">
+											<i className="fas fa-times"></i>
+										</button>
+									</div>
+									<div className="modal-body">
+										<p className="text-sm text-gray-600 mb-4">请选择需要重算的日期 (置灰日期暂无数据):</p>
+										<div className="space-y-2 max-h-60 overflow-y-auto border rounded p-3">
+											{availableDates.map(item => (
+												<div key={item.date} className={`flex items-center ${!item.hasData ? 'opacity-50' : ''}`}>
+													<input 
+														type="checkbox" 
+														id={`date-${item.date}`}
+														disabled={!item.hasData}
+														checked={selectedDates.includes(item.date)}
+														onChange={(e) => {
+															if (e.target.checked) {
+																setSelectedDates([...selectedDates, item.date]);
+															} else {
+																setSelectedDates(selectedDates.filter(d => d !== item.date));
+															}
+														}}
+														className="mr-2"
+													/>
+													<label htmlFor={`date-${item.date}`} className={`text-sm ${!item.hasData ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+														{item.date} {!item.hasData && '(无数据)'}
+													</label>
+												</div>
+											))}
+										</div>
+									</div>
+									<div className="modal-footer">
+										<button onClick={() => setShowRecalculateModal(false)} className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 transition-colors">取消</button>
+										<button 
+											disabled={selectedDates.length === 0}
+											onClick={() => {
+												setShowRecalculateModal(false);
+												setSelectedDates([]);
+												setFloatMsg(`已开始重算 ${selectedDates.length} 个日期的分时数据`);
+												setTimeout(() => setFloatMsg(''), 3000);
+											}} 
+											className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300 transition-colors"
+										>
+											开始重算
+										</button>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* 数据日志弹出窗口 */}
+						{showDataLogModal && (
+							<div className="modal-overlay">
+								<div className="modal-content" style={{width: '750px', maxWidth: '95vw'}}>
+									<div className="modal-header">
+										<h3 className="text-lg font-medium text-gray-900">数据日志</h3>
+										<button onClick={() => setShowDataLogModal(false)} className="text-gray-400 hover:text-gray-500">
+											<i className="fas fa-times"></i>
+										</button>
+									</div>
+									<div className="modal-body p-0" style={{maxHeight: '600px'}}>
+										<table className="w-full border-collapse text-sm">
+											<thead className="bg-gray-50 sticky top-0 shadow-sm">
+												<tr>
+													<th className="px-6 py-3 text-left font-medium text-gray-700 w-1/4">时间</th>
+													<th className="px-6 py-3 text-left font-medium text-gray-700 w-1/5">操作类型</th>
+													<th className="px-6 py-3 text-left font-medium text-gray-700">日志</th>
+												</tr>
+											</thead>
+											<tbody className="divide-y divide-gray-200">
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-04-10 16:30:12</td>
+													<td className="px-6 py-4 text-blue-600">手动重算</td>
+													<td className="px-6 py-4 text-gray-800">用户对 [2026-04-01] 的分时数据发起了手动重算，公司层级汇总成功</td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-04-10 08:35:05</td>
+													<td className="px-6 py-4 text-green-600">自动计算</td>
+													<td className="px-6 py-4 text-gray-800">RPA定时任务执行完毕，自动完成 2026-04-09 日分时（售电公司）数据的计算累加</td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-04-09 10:15:44</td>
+													<td className="px-6 py-4 text-blue-600">手动重算</td>
+													<td className="px-6 py-4 text-gray-800">批量重算任务结束 [2026-04-01 ~ 2026-04-05]，涉及数据已全量更新</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+									<div className="modal-footer bg-white border-t border-gray-200">
+										<button onClick={() => setShowDataLogModal(false)} className="px-5 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors shadow-sm">关闭</button>
+									</div>
+								</div>
+							</div>
+						)}
+
+						{/* 导入日志弹出窗口 */}
+						{showImportLogModal && (
+							<div className="modal-overlay">
+								<div className="modal-content" style={{width: '750px', maxWidth: '95vw'}}>
+									<div className="modal-header">
+										<h3 className="text-lg font-medium text-gray-900">执行日志</h3>
+										<button onClick={() => setShowImportLogModal(false)} className="text-gray-400 hover:text-gray-500">
+											<i className="fas fa-times"></i>
+										</button>
+									</div>
+									<div className="modal-body p-0" style={{maxHeight: '600px'}}>
+										<table className="w-full border-collapse text-sm">
+											<thead className="bg-gray-50 sticky top-0 shadow-sm">
+												<tr>
+													<th className="px-6 py-3 text-left font-medium text-gray-700 w-1/4">执行时间</th>
+													<th className="px-6 py-3 text-left font-medium text-gray-700 w-1/5">任务类型</th>
+													<th className="px-6 py-3 text-left font-medium text-gray-700">执行内容与结果</th>
+													<th className="px-6 py-3 text-center font-medium text-gray-700 w-24">状态</th>
+												</tr>
+											</thead>
+											<tbody className="divide-y divide-gray-200">
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-01 08:00</td>
+													<td className="px-6 py-4 text-gray-600">手动录入</td>
+													<td className="px-6 py-4 text-gray-800">测试.xlsx解析完成</td>
+													<td className="px-6 py-4 text-center"><span className="text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded text-xs">成功</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-01 08:00</td>
+													<td className="px-6 py-4 text-gray-600">手动录入</td>
+													<td className="px-6 py-4 text-gray-800">测试.xlsx解析失败</td>
+													<td className="px-6 py-4 text-center"><span className="text-red-600 bg-red-100 border border-red-200 px-2 py-1 rounded text-xs">失败</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA定时导入</td>
+													<td className="px-6 py-4 text-gray-800">RPA定时获取湖北省交易中心2026-01-01用户分时用电数据共计100条，导入成功</td>
+													<td className="px-6 py-4 text-center"><span className="text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded text-xs">成功</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA定时导入</td>
+													<td className="px-6 py-4 text-gray-800">RPA定时获取湖北省交易中心2026-01-01用户分时用电数据失败</td>
+													<td className="px-6 py-4 text-center"><span className="text-red-600 bg-red-100 border border-red-200 px-2 py-1 rounded text-xs">失败</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA任务开启</td>
+													<td className="px-6 py-4 text-gray-800">开启RPA任务获取湖北省交易中心用户2025-12-01~2025-12-31分时用电数据，启动成功。</td>
+													<td className="px-6 py-4 text-center"><span className="text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded text-xs">成功</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA任务开启</td>
+													<td className="px-6 py-4 text-gray-800">开启RPA任务获取湖北省交易中心用户2025-12-01~2025-12-31分时用电数据，启动失败。</td>
+													<td className="px-6 py-4 text-center"><span className="text-red-600 bg-red-100 border border-red-200 px-2 py-1 rounded text-xs">失败</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA任务导入</td>
+													<td className="px-6 py-4 text-gray-800">RPA获取湖北省交易中心2026-01-01用户分时用电数据共计100条，导入成功</td>
+													<td className="px-6 py-4 text-center"><span className="text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded text-xs">成功</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA任务导入</td>
+													<td className="px-6 py-4 text-gray-800">RPA获取湖北省交易中心2026-01-01用户分时用电数据失败</td>
+													<td className="px-6 py-4 text-center"><span className="text-red-600 bg-red-100 border border-red-200 px-2 py-1 rounded text-xs">失败</span></td>
+												</tr>
+												<tr className="hover:bg-gray-50">
+													<td className="px-6 py-4 text-gray-600">2026-01-02 08:00</td>
+													<td className="px-6 py-4 text-gray-600">RPA任务结束</td>
+													<td className="px-6 py-4 text-gray-800">RPA任务执行结束，计划获取湖北省交易中心100日用户日分时用电数据，成功爬取数据99日，失败1日。</td>
+													<td className="px-6 py-4 text-center"><span className="text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded text-xs">成功</span></td>
+												</tr>
+											</tbody>
+										</table>
+										{/* 分页组件 */}
+										<div className="flex justify-between items-center px-6 py-4 border-t border-gray-200 bg-gray-50">
+											<div className="text-sm text-gray-500">共计 45 条记录</div>
+											<div className="flex items-center space-x-1">
+												<button className="px-2 py-1 border border-gray-300 rounded bg-white text-gray-500 hover:bg-gray-100 transition-colors">&lt;</button>
+												<button className="px-3 py-1 bg-blue-500 text-white border border-blue-500 rounded">1</button>
+												<button className="px-3 py-1 border border-transparent text-gray-700 hover:bg-gray-200 rounded transition-colors">2</button>
+												<button className="px-3 py-1 border border-transparent text-gray-700 hover:bg-gray-200 rounded transition-colors">3</button>
+												<span className="px-1 text-gray-400">...</span>
+												<button className="px-3 py-1 border border-transparent text-gray-700 hover:bg-gray-200 rounded transition-colors">9</button>
+												<button className="px-2 py-1 border border-gray-300 rounded bg-white text-gray-500 hover:bg-gray-100 transition-colors">&gt;</button>
+											</div>
+										</div>
+									</div>
+									<div className="modal-footer bg-white border-t border-gray-200">
+										<button onClick={() => setShowImportLogModal(false)} className="px-5 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors shadow-sm">关闭</button>
+									</div>
+								</div>
+							</div>
+						)}
+					</div>
+					
+					{/* 浮窗提示 */}
+					{floatMsg && (
+						<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-60 shadow-xl text-white px-6 py-3 rounded-lg text-sm z-[1100] flex items-center space-x-2 transition-opacity duration-300">
+							<i className="fas fa-info-circle"></i>
+							<span>{floatMsg}</span>
+						</div>
+					)}
+				</div>
+			);
+		}
+		ReactDOM.render(<App />, document.getElementById('root'));
+	</script>
+</body>
+
+</html>
